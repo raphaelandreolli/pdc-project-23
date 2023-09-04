@@ -312,13 +312,12 @@ int main(int argc, char *argv[]) {
 			if ((rank==0 && k==0) || (rank==MPIsize-1 && k==loc_layer_size-1)){
 				continue;
 			}
-			
-			// Can this be removes??*************************************************************
-			if (rank==MPIsize-1 && k == loc_layer_size-1)
+			//***********************************************************************************
+			/*if (rank==MPIsize-1 && k == loc_layer_size-1)
 			{
 				continue;
-			}
-            // **********************************************************************************
+			}*/
+            		// **********************************************************************************
 			/* Check it only if it is a local maximum */
             if ( loc_layer[k] > loc_layer[k-1] && loc_layer[k] > loc_layer[k+1] ) {
                 if ( loc_layer[k] > in.loc_max_val ) {
@@ -349,7 +348,7 @@ int main(int argc, char *argv[]) {
 
     /* 5. End time measurement */
     MPI_Barrier(MPI_COMM_WORLD);
-	ttotal = cp_Wtime() - ttotal;
+    ttotal = cp_Wtime() - ttotal;
 
     if ( rank == 0 ) {
 
@@ -381,7 +380,7 @@ int main(int argc, char *argv[]) {
 
     /* 9. Program ended successfully */
 	// Finalize MPI
-	MPI_Finalize();
+    MPI_Finalize();
     return 0;
 }
 

@@ -1,38 +1,38 @@
-/*
- * Simplified simulation of high-energy particle storms
- *
- * Parallel computing (Degree in Computer Engineering)
- * 2017/2018
- *
- * Version: 2.0
- *
- * Code prepared to be used with the Tablon on-line judge.
- * The current Parallel Computing course includes contests using:
- * OpenMP, MPI, and CUDA.
- *
- * (c) 2018 Arturo Gonzalez-Escribano, Eduardo Rodriguez-Gutiez
- * Grupo Trasgo, Universidad de Valladolid (Spain)
- *
- * This work is licensed under a Creative Commons Attribution-ShareAlike 4.0 International License.
- * https://creativecommons.org/licenses/by-sa/4.0/
- */
+// 
+// Simplified simulation of high-energy particle storms
+// 
+// Parallel computing (Degree in Computer Engineering)
+// 2017/2018
+// 
+// Version: 2.0
+// 
+// Code prepared to be used with the Tablon on-line judge.
+// The current Parallel Computing course includes contests using:
+// OpenMP, MPI, and CUDA.
+// 
+// (c) 2018 Arturo Gonzalez-Escribano, Eduardo Rodriguez-Gutiez
+// Grupo Trasgo, Universidad de Valladolid (Spain)
+// 
+// This work is licensed under a Creative Commons Attribution-ShareAlike 4.0 International License.
+// https://creativecommons.org/licenses/by-sa/4.0/
+// 
+
 #include<stdio.h>
 #include<stdlib.h>
 #include<math.h>
 #include<sys/time.h>
 
-/* Headers for the OpenMP assignment versions */
+// Headers for the OpenMP assignment versions 
 #include<omp.h>
 
-/* Use fopen function in local tests. The Tablon online judge software 
-   substitutes it by a different function to run in its sandbox */
+// Use fopen function in local tests. The Tablon online judge software substitutes it by a different function to run in its sandbox 
 #ifdef CP_TABLON
 #include "cputilstablon.h"
 #else
 #define    cp_open_file(name) fopen(name,"r")
 #endif
 
-/* Function to get wall time */
+// Function to get wall time
 double cp_Wtime(){
     struct timeval tv;
     gettimeofday(&tv, NULL);
@@ -42,39 +42,45 @@ double cp_Wtime(){
 
 #define THRESHOLD    0.001f
 
-/* Structure used to store data for one storm of particles */
+// Structure used to store data for one storm of particles 
 typedef struct {
     int size;    // Number of particles
     int *posval; // Positions and values
 } Storm;
 
-/* THIS FUNCTION CAN BE MODIFIED */
-/* Function to update a single position of the layer */
+// ! -------------------------------------------------------------------------------------
+// ! THIS FUNCTION CAN BE MODIFIED 
+// ! Function to update a single position of the layer 
+// ! -------------------------------------------------------------------------------------
 void update( float *layer, int layer_size, int k, int pos, float energy ) {
-    /* 1. Compute the absolute value of the distance between the
-        impact position and the k-th position of the layer */
+    // 1. Compute the absolute value of the distance between the impact position
+    // and the k-th position of the layer 
     int distance = pos - k;
-    if ( distance < 0 ) distance = - distance;
+    if ( distance < 0 ) distance = - distance; // always positive value
 
-    /* 2. Impact cell has a distance value of 1 */
+    // 2. Impact cell has a distance value of 1 
     distance = distance + 1;
 
-    /* 3. Square root of the distance */
-    /* NOTE: Real world atenuation typically depends on the square of the distance.
-       We use here a tailored equation that affects a much wider range of cells */
+    // 3. Square root of the distance
+    // NOTE: Real world atenuation typically depends on the square of the distance.
+    // We use here a tailored equation that affects a much wider range of cells 
     float atenuacion = sqrtf( (float)distance );
 
-    /* 4. Compute attenuated energy */
+    // 4. Compute attenuated energy
     float energy_k = energy / layer_size / atenuacion;
 
-    /* 5. Do not add if its absolute value is lower than the threshold */
+    // 5. Do not add if its absolute value is lower than the threshold
     if ( energy_k >= THRESHOLD / layer_size || energy_k <= -THRESHOLD / layer_size )
+        #pragma omp atomic // prevent risk of data races or thread interference
         layer[k] = layer[k] + energy_k;
 }
+// ! -------------------------------------------------------------------------------------
 
 
-/* ANCILLARY FUNCTIONS: These are not called from the code section which is measured, leave untouched */
-/* DEBUG function: Prints the layer status */
+// * -------------------------------------------------------------------------------------
+// * ANCILLARY FUNCTIONS: These are not called from the code section which is measured, leave untouched */
+// * DEBUG function: Prints the layer status */
+// * -------------------------------------------------------------------------------------
 void debug_print(int layer_size, float *layer, int *positions, float *maximum, int num_storms ) {
     int i,k;
     /* Only print for array size up to 35 (change it for bigger sizes if needed) */
@@ -107,9 +113,9 @@ void debug_print(int layer_size, float *layer, int *positions, float *maximum, i
     }
 }
 
-/*
- * Function: Read data of particle storms from a file
- */
+// * -------------------------------------------------------------------------------------
+// * Function: Read data of particle storms from a file
+// * -------------------------------------------------------------------------------------
 Storm read_storm_file( char *fname ) {
     FILE *fstorm = cp_open_file( fname );
     if ( fstorm == NULL ) {
@@ -145,27 +151,33 @@ Storm read_storm_file( char *fname ) {
     return storm;
 }
 
-/*
- * MAIN PROGRAM
- */
+// ! -------------------------------------------------------------------------------------
+// ! Main Program
+// ! -------------------------------------------------------------------------------------
 int main(int argc, char *argv[]) {
+    // Declare integer variables
     int i,j,k;
 
-    /* 1.1. Read arguments */
+    // Use specific number of threads when we create a parallel region
+    // omp_set_num_threads(4);
+
+    // 1.1. Read arguments 
     if (argc<3) {
         fprintf(stderr,"Usage: %s <size> <storm_1_file> [ <storm_i_file> ] ... \n", argv[0] );
         exit( EXIT_FAILURE );
     }
-
-    int layer_size = atoi( argv[1] );
+    // Convert user input or string data that represents integers into an actual integer data
+    int layer_size = atoi( argv[1] ); // number of cells which is the first input
+    // Number of waves files included in the file
     int num_storms = argc-2;
+    // Create a struct with correct size
     Storm storms[ num_storms ];
 
-    /* 1.2. Read storms information */
+    // 1.2. Read storms information
     for( i=2; i<argc; i++ ) 
         storms[i-2] = read_storm_file( argv[i] );
 
-    /* 1.3. Intialize maximum levels to zero */
+    // 1.3. Intialize maximum levels to zero
     float maximum[ num_storms ];
     int positions[ num_storms ];
     for (i=0; i<num_storms; i++) {
@@ -173,52 +185,65 @@ int main(int argc, char *argv[]) {
         positions[i] = 0;
     }
 
-    /* 2. Begin time measurement */
+    // 2. Begin time measurement
     double ttotal = cp_Wtime();
 
-    /* START: Do NOT optimize/parallelize the code of the main program above this point */
+    // ! START: Do NOT optimize/parallelize the code of the main program above this point 
+    // ! -------------------------------------------------------------
 
-    /* 3. Allocate memory for the layer and initialize to zero */
+    // 3. Allocate memory for the layer and initialize to zero
     float *layer = (float *)malloc( sizeof(float) * layer_size );
     float *layer_copy = (float *)malloc( sizeof(float) * layer_size );
     if ( layer == NULL || layer_copy == NULL ) {
         fprintf(stderr,"Error: Allocating the layer memory\n");
         exit( EXIT_FAILURE );
     }
-    for( k=0; k<layer_size; k++ ) layer[k] = 0.0f;
-    for( k=0; k<layer_size; k++ ) layer_copy[k] = 0.0f;
+
+    // Initialize layer cells to zero
+    for ( k=0; k < layer_size; k++ ){
+        layer[k] = 0.0f;
+        layer_copy[k] = 0.0f;
+    } 
     
-    /* 4. Storms simulation */
+    // * -------------------------------------------------------------
+    // ! 4. Storms simulation 
     for( i=0; i<num_storms; i++) {
 
-        /* 4.1. Add impacts energies to layer cells */
-        /* For each particle */
-        for( j=0; j<storms[i].size; j++ ) {
-            /* Get impact energy (expressed in thousandths) */
+        // ! 4.1. Add impacts energies to layer cells
+        // For each particle
+        // ! the particles are divided into chunks that separate threads compute
+        #pragma omp parallel for default(none) shared(storms, i, layer, layer_size) private(j)
+        for( j=0; j < storms[i].size; j++ ) { // loops through each particle in the storm
+
+            // Get impact energy (expressed in thousandths)
             float energy = (float)storms[i].posval[j*2+1] * 1000;
-            /* Get impact position */
+            // Get impact position 
             int position = storms[i].posval[j*2];
 
-            /* For each cell in the layer */
-            for( k=0; k<layer_size; k++ ) {
-                /* Update the energy value for the cell */
+            // For each cell in the layer
+            // ! the effect of each particle on individual cells is parallized by dividing the total layer into chunks that separate threads compute
+            #pragma omp parallel for default(none) shared(layer, layer_size, energy, position) private(k)
+            for( k=0; k<layer_size; k++ ) { 
+                // Update the energy value for the cell
                 update( layer, layer_size, k, position, energy );
             }
         }
-
-        /* 4.2. Energy relaxation between storms */
-        /* 4.2.1. Copy values to the ancillary array */
+        
+        // ! 4.2. Energy relaxation between storms
+        // 4.2.1. Copy values to the ancillary array
         for( k=0; k<layer_size; k++ ) 
             layer_copy[k] = layer[k];
 
-        /* 4.2.2. Update layer using the ancillary values.
-                  Skip updating the first and last positions */
+        // 4.2.2. Update layer using the ancillary values.
+        // Skip updating the first and last positions
+        // ! Dependencies in this loop prevents parallelization opportunities 
         for( k=1; k<layer_size-1; k++ )
             layer[k] = ( layer_copy[k-1] + layer_copy[k] + layer_copy[k+1] ) / 3;
 
-        /* 4.3. Locate the maximum value in the layer, and its position */
+        // 4.3. Locate the maximum value in the layer, and its position
+        // ! Dependencies in this loop prevents parallelization opportunities 
         for( k=1; k<layer_size-1; k++ ) {
-            /* Check it only if it is a local maximum */
+            // Check it only if it is a local maximum 
             if ( layer[k] > layer[k-1] && layer[k] > layer[k+1] ) {
                 if ( layer[k] > maximum[i] ) {
                     maximum[i] = layer[k];
@@ -226,33 +251,34 @@ int main(int argc, char *argv[]) {
                 }
             }
         }
-    }
+    } // ! END of storm loop
 
-    /* END: Do NOT optimize/parallelize the code below this point */
-
-    /* 5. End time measurement */
+    // ! END: Do NOT optimize/parallelize the code below this point
+    // ! -------------------------------------------------------------
+    // 5. End time measurement
     ttotal = cp_Wtime() - ttotal;
 
-    /* 6. DEBUG: Plot the result (only for layers up to 35 points) */
+    // 6. DEBUG: Plot the result (only for layers up to 35 points)
     #ifdef DEBUG
     debug_print( layer_size, layer, positions, maximum, num_storms );
     #endif
 
-    /* 7. Results output, used by the Tablon online judge software */
+    // 7. Results output, used by the Tablon online judge software */
     printf("\n");
-    /* 7.1. Total computation time */
+    // 7.1. Total computation time */
     printf("Time: %lf\n", ttotal );
-    /* 7.2. Print the maximum levels */
+    // 7.2. Print the maximum levels */
     printf("Result:");
     for (i=0; i<num_storms; i++)
         printf(" %d %f", positions[i], maximum[i] );
     printf("\n");
 
-    /* 8. Free resources */    
+    // 8. Free resources */    
     for( i=0; i<argc-2; i++ )
         free( storms[i].posval );
 
-    /* 9. Program ended successfully */
+    // 9. Program ended successfully */
     return 0;
 }
 
+// ! -------------------------------------------------------------------------------------

@@ -1,5 +1,7 @@
 # Project for the PDC summer school 2023
 
+Project by Axel Lundkvist, Raphael Andreolli, Vinit Nagda.
+
 ## 1 Description
 In this project, the task is to work in groups of 1-3 students and parallelize the
 ”energy storms” code by using OpenMP, MPI, and CUDA/HIP. In addition,

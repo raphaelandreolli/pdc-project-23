@@ -3,9 +3,9 @@
 Project by Axel Lundkvist, Raphael Andreolli, Vinit Nagda.
 
 Instructions on how to compile and to run the programs:
-- open *instruction-omp.c*
-- open *instruction-mpi.c*
-- open *instruction-hip.c*
+- open *instructions-omp.c*
+- open *instructions-mpi.c*
+- open *instructions-hip.c*
 
 ## 1 Description
 In this project, the task is to work in groups of 1-3 students and parallelize the

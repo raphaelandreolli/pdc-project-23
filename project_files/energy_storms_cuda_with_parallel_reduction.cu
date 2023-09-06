@@ -42,7 +42,7 @@
 	}
 
 
-/* Use fopen function in local tests. The Tablon online judge software
+/* Use fopen function in local tests. The Tablon online judge software 
    substitutes it by a different function to run in its sandbox */
 #ifdef CP_TABLON
 #include "cputilstablon.h"
@@ -71,45 +71,46 @@ typedef struct {
 
 
 
-/* Kernel Function to update energy due to particle bombardment on cells */
-__global__ void kernelupdate( float *d_layer,float *h_layer, int layer_size, Storm storms) {
-
-//global thread index
+/* THIS FUNCTION CAN BE MODIFIED */
+/* Function to update a single position of the layer */
+__global__ void kernelupdate( float *d_layer,float *h_layer, int layer_size, Storm storms,float* maxresult_block, int* maxindex_block) {
+    /* 1. Compute the absolute value of the distance between the
+        impact position and the k-th position of the layer */
+		
     int k = blockIdx.x * blockDim.x + threadIdx.x;
-
-//local thread index for local shared array
-	const int s_idx = threadIdx.x + RAD;
-  
-//dynamic shared memory
+		
+	
 	extern __shared__ float s_in[];
 
+    __shared__ float maxVals[TPB];
+    __shared__ int maxIndices[TPB];
+	
+	const int s_idx = threadIdx.x + RAD;
+	int tid = threadIdx.x;
+
     if (k >= layer_size) return;
+	
 
-
-
+	
 	float energy_value = 0.0f ;
 	for (int i=0; i<storms.size; i++)
 	{
- /* 1. Compute the absolute value of the distance between the impact position and the k-th position of the layer */
 		float energy = storms.posval[i*2+1] * 1000;
 		int distance = abs(storms.posval[i*2] - k) + 1;
 		float attenuation = sqrtf(static_cast<float>(distance));
-     /*  Compute attenuated energy */
 		float energy_k = energy / layer_size / attenuation;
 
 
-		if (energy_k >= THRESHOLD / layer_size || energy_k <= -THRESHOLD / layer_size)
+		if (energy_k >= THRESHOLD / layer_size || energy_k <= -THRESHOLD / layer_size) 
 		{
-			energy_value +=energy_k;
+			energy_value +=energy_k; 
 	    }
 	}
-
-  /*  Add intermediate impacts energies before relaxation to  cells */
 	h_layer[k]=h_layer[k]+energy_value;
 	__syncthreads();
 
-//copying data from global to local shared array
-	s_in[s_idx] = h_layer[k];
+	
+	s_in[s_idx] = h_layer[k];		
 	if (threadIdx.x < RAD) {
 		if (k==0){
 			s_in[s_idx - RAD] = h_layer[k];
@@ -120,14 +121,47 @@ __global__ void kernelupdate( float *d_layer,float *h_layer, int layer_size, Sto
 		s_in[s_idx + blockDim.x] = h_layer[k + blockDim.x];
 	}
 	__syncthreads();
-
-   /*  Energy relaxation between storms, preserving first and last element */
     if ( k == 0 || k == layer_size-1 ) {
-		d_layer[k]=h_layer[k];
+		d_layer[k]=h_layer[k];	
     }
 	else {
 		d_layer[k] = (s_in[s_idx-1]+ s_in[s_idx] + s_in[s_idx+1])/3;
 	}
+	__syncthreads();
+	
+    float maxValue = RAND_MIN;
+    int maxIdx = -1;
+	
+    while (k < layer_size) {
+        float val = d_layer[k];
+        if (val > maxValue) {
+            maxValue = val;
+            maxIdx = k;
+        }
+        k += blockDim.x * gridDim.x;
+    }
+
+    maxVals[tid] = maxValue;
+    maxIndices[tid] = maxIdx;
+
+    __syncthreads();
+	
+    // Perform parallel reduction to find the maximum value and its index
+    for (int stride = blockDim.x / 2; stride > 0; stride >>= 1) {
+        if (tid < stride) {
+            if (maxVals[tid] < maxVals[tid + stride]) {
+                maxVals[tid] = maxVals[tid + stride];
+                maxIndices[tid] = maxIndices[tid + stride];
+            }
+        }
+        __syncthreads();
+    }
+    
+    // Store the final result in global memory
+    if (tid == 0) {
+        maxresult_block[blockIdx.x] = maxVals[0];
+        maxindex_block[blockIdx.x] = maxIndices[0];
+    }
 }
 
 
@@ -142,7 +176,7 @@ void debug_print(int layer_size, float *layer, int *positions, float *maximum, i
             /* Print the energy value of the current cell */
             printf("%10.4f |", layer[k] );
 
-            /* Compute the number of characters.
+            /* Compute the number of characters. 
                This number is normalized, the maximum level is depicted with 60 characters */
             int ticks = (int)( 60 * layer[k] / maximum[num_storms-1] );
 
@@ -156,7 +190,7 @@ void debug_print(int layer_size, float *layer, int *positions, float *maximum, i
                 printf("o");
 
             /* If the cell is the maximum of any storm, print the storm mark */
-            for (i=0; i<num_storms; i++)
+            for (i=0; i<num_storms; i++) 
                 if ( positions[i] == k ) printf(" M%d", i );
 
             /* Line feed */
@@ -175,7 +209,7 @@ Storm read_storm_file( char *fname ) {
         exit( EXIT_FAILURE );
     }
 
-    Storm storm;
+    Storm storm;    
     int ok = fscanf(fstorm, "%d", &(storm.size) );
     if ( ok != 1 ) {
         fprintf(stderr,"Error: Reading size of storm file %s\n", fname );
@@ -187,10 +221,10 @@ Storm read_storm_file( char *fname ) {
         fprintf(stderr,"Error: Allocating memory for storm file %s, with size %d\n", fname, storm.size );
         exit( EXIT_FAILURE );
     }
-
+    
     int elem;
     for ( elem=0; elem<storm.size; elem++ ) {
-        ok = fscanf(fstorm, "%d %d\n",
+        ok = fscanf(fstorm, "%d %d\n", 
                     &(storm.posval[elem*2]),
                     &(storm.posval[elem*2+1]) );
         if ( ok != 2 ) {
@@ -209,6 +243,8 @@ Storm read_storm_file( char *fname ) {
 int main(int argc, char *argv[]) {
     int i,k;
 
+
+
     /* 1.1. Read arguments */
     if (argc<3) {
         fprintf(stderr,"Usage: %s <size> <storm_1_file> [ <storm_i_file> ] ... \n", argv[0] );
@@ -217,12 +253,12 @@ int main(int argc, char *argv[]) {
 
     int layer_size = atoi( argv[1] );
     int num_storms = argc-2;
-    int numBlocks = (atoi( argv[1] ) + TPB - 1) / TPB; // Number of blocks needed
-
+	
+	int numBlocks = (atoi( argv[1] ) + TPB - 1) / TPB; // Number of blocks needed
     Storm storms[ num_storms ];
 
     /* 1.2. Read storms information */
-    for( i=2; i<argc; i++ )
+    for( i=2; i<argc; i++ ) 
         storms[i-2] = read_storm_file( argv[i] );
 
     /* 1.3. Intialize maximum levels to zero */
@@ -249,58 +285,66 @@ int main(int argc, char *argv[]) {
     }
     for( k=0; k<layer_size; k++ ) layer[k] = 0.0f;
 
-
+    
     /* 4. Storms simulation */
     for( i=0; i<num_storms; i++) {
 
- // Load storm to device memory
 	    Storm storm;
 	    storm.size= storms[i].size;
 	    size_t size1=2*storms[i].size* sizeof(int);
 	    cudaMalloc(&storm.posval, size1);
         cudaMemcpy(storm.posval, storms[i].posval, size1,
-               cudaMemcpyHostToDevice);
+               cudaMemcpyHostToDevice);        
 
-// Allocate layer and intermediate layer (h_layer) before relaxation in device memory
 	    float *d_layer;
 		cudaMalloc( &d_layer,sizeof(float) * layer_size );
-
+			
 	    float *h_layer;
-		cudaMalloc( &h_layer,sizeof(float) * layer_size );
+		cudaMalloc( &h_layer,sizeof(float) * layer_size );	
 
-// Copy layer from host CPU to device GPU
-		cudaMemcpy(h_layer, layer, layer_size * sizeof(float), cudaMemcpyHostToDevice);
-
- 
+		cudaMemcpy(h_layer, layer, layer_size * sizeof(float), cudaMemcpyHostToDevice);	
+		
+    // Allocate device memory for the result and index arrays
+		float* d_maxresult_block;
+		int* d_maxindex_block;
+		cudaMalloc((void**)&d_maxresult_block, numBlocks * sizeof(float));
+		cudaMalloc((void**)&d_maxindex_block, numBlocks * sizeof(int));
+		
+         // Invoke kernel
         dim3 blockDim(TPB);
         dim3 gridDim(numBlocks);
-
-//Size for shared memory array        
         const size_t smemSize = (blockDim.x + 2 * RAD) * sizeof(float);
-
-// Invoke kernel
-		kernelupdate<<<gridDim, blockDim,smemSize>>>(d_layer, h_layer, layer_size, storm);
+		kernelupdate<<<gridDim, blockDim,smemSize>>>(d_layer, h_layer, layer_size, storm, d_maxresult_block,d_maxindex_block);
         cudaDeviceSynchronize() ;
 
-// Read layer from device memory
 		size_t size=sizeof(float) * layer_size;
 	    cudaMemcpy(layer, d_layer, size,
                cudaMemcpyDeviceToHost);
+        
 
-// Free device memory
-    cudaFree(h_layer);
+		
+    // Copy the results from device to host
+		float* h_result = (float*)malloc(numBlocks * sizeof(float));
+		int* h_index = (int*)malloc(numBlocks * sizeof(int));
+		cudaMemcpy(h_result, d_maxresult_block, numBlocks * sizeof(float), cudaMemcpyDeviceToHost);
+		cudaMemcpy(h_index, d_maxindex_block, numBlocks * sizeof(int), cudaMemcpyDeviceToHost);
+	
+    // Find the maximum value and its index among the block-wise results
+
+		for (int j = 0; j < numBlocks; j++) {
+			if (h_result[j] > maximum[i]) {
+				maximum[i] = h_result[j];
+				positions[i] = h_index[j];
+			}
+		}
+		
+	// Free allocated memory
+		free(h_result);
+		free(h_index);
+		cudaFree(h_layer);
 		cudaFree(d_layer);
-
-        /* 4.3. Locate the maximum value in the layer, and its position */
-        for( k=1; k<layer_size-1; k++ ) {
-            /* Check it only if it is a local maximum */
-            if ( layer[k] > layer[k-1] && layer[k] > layer[k+1] ) {
-                if ( layer[k] > maximum[i] ) {
-                    maximum[i] = layer[k];
-                    positions[i] = k;
-                }
-            }
-        }
+		cudaFree(d_maxresult_block);
+		cudaFree(d_maxindex_block);
     }
 
     /* END: Do NOT optimize/parallelize the code below this point */
@@ -324,7 +368,7 @@ int main(int argc, char *argv[]) {
         printf(" %d %f", positions[i], maximum[i] );
     printf("\n");
 
-    /* 8. Free resources */
+    /* 8. Free resources */    
     for( i=0; i<argc-2; i++ )
         free( storms[i].posval );
 

@@ -1,0 +1,11 @@
+To run the program energy_storms_mpi, first compile the program using the Makefile via:
+
+make energy_storms_mpi
+
+For other compilation modes,e.g. debug, read the instructions in the make file via:
+
+make help
+
+After compilation the program is readt to run, to run on Dardel, allocate desired amount of CPU resourses and lauch the program via:
+
+srun -n <number of mpi processes> -u ./energy_storms_mpi <array size> <test file 1> ... <test file n>

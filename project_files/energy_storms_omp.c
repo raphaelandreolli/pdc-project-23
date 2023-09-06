@@ -236,12 +236,10 @@ int main(int argc, char *argv[]) {
 
         // 4.2.2. Update layer using the ancillary values.
         // Skip updating the first and last positions
-        // ! Dependencies in this loop prevents parallelization opportunities 
         for( k=1; k<layer_size-1; k++ )
             layer[k] = ( layer_copy[k-1] + layer_copy[k] + layer_copy[k+1] ) / 3;
 
         // 4.3. Locate the maximum value in the layer, and its position
-        // ! Dependencies in this loop prevents parallelization opportunities 
         for( k=1; k<layer_size-1; k++ ) {
             // Check it only if it is a local maximum 
             if ( layer[k] > layer[k-1] && layer[k] > layer[k+1] ) {

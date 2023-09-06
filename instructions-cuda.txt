@@ -1,0 +1,3 @@
+To run the program energy_storms_cuda.cu, which is parallelised with CUDA and executed on NVIDIA GPU using Google Colab:
+
+follow the instruction in the Google colab file: EnergyStorm_CUDA.ipynb

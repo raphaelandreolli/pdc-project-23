@@ -5,7 +5,7 @@
 make all // change compiler setting in Makefile depending on if the program is run on local machine or Dardel
 
 // Allocate resources (1 node)
-salloc -t 00:20:00 -A edu23.summer -N 1 -p main 
+salloc -t 00:10:00 -A edu23.summer -N 1 -p main 
 
 // Run jobs in compute node, not login node.
 

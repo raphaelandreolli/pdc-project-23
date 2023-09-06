@@ -5,7 +5,7 @@ Project by Axel Lundkvist, Raphael Andreolli, Vinit Nagda.
 Instructions on how to compile and to run the programs:
 - open *instructions-omp.txt*
 - open *instructions-mpi.txt*
-- open *instructions-hip.txt*
+- open *instructions-cuda.txt*
 
 ## 1 Description
 In this project, the task is to work in groups of 1-3 students and parallelize the
